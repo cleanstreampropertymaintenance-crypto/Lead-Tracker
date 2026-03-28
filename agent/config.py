@@ -14,21 +14,18 @@ MODEL = "claude-sonnet-4-20250514"
 SCREENSHOT_MAX_WIDTH = 1280  # Resize screenshots to save tokens
 SCREENSHOT_QUALITY = 85
 
-# Safety settings
+# Safety settings - only pause for actual payments/money
 REQUIRE_CONFIRMATION_FOR = [
     "payment",
     "purchase",
-    "delete",
-    "password",
-    "sign out",
-    "log out",
-    "uninstall",
-    "format",
     "send money",
+    "pay now",
+    "checkout",
 ]
 
 # How long to wait between actions (seconds)
-ACTION_DELAY = 0.5
+ACTION_DELAY = 0.3
 
-# Max actions per single task before asking user to confirm continuation
-MAX_ACTIONS_PER_TASK = 30
+# How long to wait after an action before taking a screenshot (seconds)
+# This gives the screen time to update (page loads, animations, etc.)
+SCREENSHOT_DELAY = 0.8

@@ -5,6 +5,13 @@ Lead Tracker AI Agent
 A conversational AI that can see your screen and control your computer.
 Talk to it naturally and it will perform tasks for you.
 
+It works in a continuous loop:
+  1. Takes a screenshot (sees your screen)
+  2. Sends it to Claude AI to decide what to do
+  3. Performs ONE action (click, type, scroll, etc.)
+  4. Takes another screenshot to see the result
+  5. Repeats until the task is done
+
 Usage:
   1. Set your ANTHROPIC_API_KEY in environment or agent/config.py
   2. pip install -r agent/requirements.txt
@@ -12,15 +19,16 @@ Usage:
 
 Commands:
   Type naturally to give tasks ("set up my Meta ads account")
-  "screenshot" or "look" - agent takes a fresh look at your screen
-  "stop" or "pause"      - stop current automation
-  "quit" or "exit"       - exit the agent
-  "reset"                - clear conversation history
+  "look"  - agent just looks at your screen and describes it
+  "stop"  - interrupt the current task
+  "quit"  - exit the agent
+  "reset" - clear conversation history
 """
 
 import os
 import sys
 import time
+import threading
 
 # ── Terminal Colors ──────────────────────────────────────────────────
 GREEN = "\033[92m"
@@ -32,17 +40,21 @@ BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
+# Flag to let user interrupt the action loop
+stop_requested = False
+
 
 def banner():
     print(f"""
 {CYAN}{BOLD}╔══════════════════════════════════════════════════╗
 ║          Lead Tracker AI Agent                    ║
-║     I can see your screen and help you set up     ║
-║     your Meta Ads Manager and more.               ║
+║     I can see your screen and control your        ║
+║     computer to help you get things done.         ║
 ╚══════════════════════════════════════════════════╝{RESET}
 
-{DIM}Commands: type a task, "look" to see screen, "quit" to exit{RESET}
-{DIM}Safety:   move mouse to any corner to emergency-stop{RESET}
+{DIM}Type a task naturally. The agent sees your screen after every action.{RESET}
+{DIM}Type "stop" to interrupt, "quit" to exit.{RESET}
+{DIM}Emergency stop: move mouse to any screen corner.{RESET}
 """)
 
 
@@ -58,28 +70,41 @@ def print_agent(text):
             in_action_block = False
             continue
         if not in_action_block:
-            print(f"  {CYAN}{line}{RESET}")
+            stripped = line.strip()
+            if stripped:
+                print(f"  {CYAN}{stripped}{RESET}")
 
 
 def print_action(result):
-    """Print an action result."""
     print(f"    {MAGENTA}> {result}{RESET}")
 
 
 def print_safety(msg):
-    """Print a safety warning."""
     print(f"\n  {RED}{BOLD}[SAFETY]{RESET} {YELLOW}{msg}{RESET}")
 
 
+def listen_for_stop():
+    """Background thread that listens for 'stop' typed during action loop."""
+    global stop_requested
+    while True:
+        try:
+            line = input()
+            if line.strip().lower() in ("stop", "pause", "s"):
+                stop_requested = True
+        except (EOFError, KeyboardInterrupt):
+            break
+
+
 def main():
+    global stop_requested
     banner()
 
     # ── Validate setup ───────────────────────────────────────────────
     try:
-        from config import ANTHROPIC_API_KEY
+        from config import ANTHROPIC_API_KEY, SCREENSHOT_DELAY
     except ImportError:
-        print(f"{RED}Error: Could not import config. Run from the project root:{RESET}")
-        print(f"  cd Lead-Tracker && python agent/agent.py")
+        print(f"{RED}Error: Could not import config. Run from the agent directory:{RESET}")
+        print(f"  cd Lead-Tracker/agent && python agent.py")
         sys.exit(1)
 
     if not ANTHROPIC_API_KEY:
@@ -98,7 +123,7 @@ def main():
 
     # ── Initialize ───────────────────────────────────────────────────
     from brain import AgentBrain
-    from screen import take_screenshot
+    from screen import take_screenshot, execute_action
 
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     brain = AgentBrain(project_dir)
@@ -127,128 +152,113 @@ def main():
             print(f"{GREEN}Conversation reset.{RESET}\n")
             continue
 
-        # ── Take screenshot for context ──────────────────────────────
-        take_fresh = lower in ("screenshot", "look", "see", "screen")
-
-        print(f"\n  {DIM}Taking screenshot...{RESET}")
+        # ── Take initial screenshot ──────────────────────────────────
+        print(f"\n  {DIM}Looking at your screen...{RESET}")
         try:
             screenshot = take_screenshot()
         except Exception as e:
             print(f"  {RED}Could not capture screen: {e}{RESET}")
-            print(f"  {DIM}Continuing without visual context...{RESET}")
             screenshot = None
 
-        # ── Think ────────────────────────────────────────────────────
-        message = None if take_fresh else user_input
-        if take_fresh:
-            message = user_input if lower not in ("screenshot", "look", "see", "screen") else "What do you see on my screen?"
+        # First message to Claude with the user's task + screenshot
+        is_look = lower in ("look", "see", "screenshot", "screen")
+        message = "What do you see on my screen?" if is_look else user_input
 
-        print(f"  {DIM}Thinking...{RESET}\n")
+        # ── Continuous act-look-think loop ────────────────────────────
+        stop_requested = False
+        is_first = True
 
-        try:
-            response_text, actions, safety_warning = brain.think(
-                user_message=message,
-                screenshot_b64=screenshot
-            )
-        except Exception as e:
-            print(f"  {RED}Error talking to Claude: {e}{RESET}\n")
-            continue
+        while not stop_requested:
+            # Think
+            if is_first:
+                print(f"  {DIM}Thinking...{RESET}")
+            else:
+                print(f"  {DIM}Seeing result... thinking...{RESET}")
 
-        # ── Display response ─────────────────────────────────────────
-        print_agent(response_text)
-        print()
-
-        # ── Check for task complete ──────────────────────────────────
-        if "TASK COMPLETE" in response_text:
-            print(f"  {GREEN}{BOLD}Task finished!{RESET}\n")
-            continue
-
-        # ── Safety check ─────────────────────────────────────────────
-        if safety_warning:
-            print_safety(safety_warning)
             try:
-                confirm = input(f"  {YELLOW}?{RESET} Type 'yes' to proceed, anything else to skip: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print(f"\n{YELLOW}Skipped.{RESET}")
-                continue
-            if confirm != "yes":
-                print(f"  {DIM}Skipped action.{RESET}\n")
-                brain.conversation.append({
-                    "role": "user",
-                    "content": "User declined the action. Please suggest an alternative or ask what to do."
-                })
-                continue
+                response_text, action, safety_warning = brain.think(
+                    user_message=message if is_first else None,
+                    screenshot_b64=screenshot
+                )
+            except Exception as e:
+                print(f"  {RED}Error: {e}{RESET}\n")
+                break
 
-        # ── Execute actions ──────────────────────────────────────────
-        if actions:
-            print(f"  {DIM}Executing {len(actions)} action(s)...{RESET}")
-            needs_screenshot = False
+            is_first = False
+            message = None  # Only send user message on first iteration
 
-            for action in actions:
-                if action.get("type") == "screenshot":
-                    needs_screenshot = True
-                    continue
+            # Show what the agent is thinking
+            print_agent(response_text)
 
+            # ── Task complete? ───────────────────────────────────────
+            if action is None and safety_warning is None:
+                # Either done, needs user input, or no action to take
+                if "done" in response_text.lower() or "TASK COMPLETE" in response_text:
+                    print(f"\n  {GREEN}{BOLD}Task finished!{RESET}\n")
+                else:
+                    print()  # Agent is asking a question, return to input prompt
+                break
+
+            # ── Safety check ─────────────────────────────────────────
+            if safety_warning:
+                print_safety(safety_warning)
                 try:
-                    result = execute_action_safe(action)
-                    print_action(result)
-                except Exception as e:
-                    print(f"    {RED}Action failed: {e}{RESET}")
+                    confirm = input(f"  {YELLOW}?{RESET} Type 'yes' to proceed, anything else to skip: ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print(f"\n{YELLOW}Skipped.{RESET}")
+                    break
+                if confirm == "yes":
+                    brain.add_user_message("User confirmed. Proceed with the action.")
+                    # Re-think with confirmation
+                    continue
+                else:
+                    brain.add_user_message("User declined. Suggest an alternative or ask what to do.")
+                    # Let agent respond to the decline
+                    try:
+                        screenshot = take_screenshot()
+                        response_text, action, _ = brain.think(screenshot_b64=screenshot)
+                        print_agent(response_text)
+                    except Exception:
+                        pass
+                    print()
                     break
 
-            # ── If actions requested a follow-up screenshot, loop ────
-            if needs_screenshot:
-                print(f"\n  {DIM}Checking result...{RESET}")
-                time.sleep(1)
-                try:
-                    new_screenshot = take_screenshot()
-                    response_text, new_actions, safety_warning = brain.think(
-                        screenshot_b64=new_screenshot
-                    )
-                    print_agent(response_text)
-                    print()
-
-                    if safety_warning:
-                        print_safety(safety_warning)
-                    elif new_actions:
-                        # Execute follow-up actions too
-                        for action in new_actions:
-                            if action.get("type") == "screenshot":
-                                continue
-                            try:
-                                result = execute_action_safe(action)
-                                print_action(result)
-                            except Exception as e:
-                                print(f"    {RED}Action failed: {e}{RESET}")
-                                break
-
-                except Exception as e:
-                    print(f"  {RED}Error: {e}{RESET}")
-
-            print()
-
-        # ── Pause check ──────────────────────────────────────────────
-        if brain.should_pause():
-            print(f"  {YELLOW}Done {MAX_ACTIONS_PER_TASK} actions. Want me to continue? (yes/no){RESET}")
+            # ── Execute the single action ────────────────────────────
             try:
-                cont = input(f"  {YELLOW}?{RESET} ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
+                result = execute_action(action)
+                print_action(result)
+            except Exception as e:
+                print(f"    {RED}Action failed: {e}{RESET}")
+                brain.add_user_message(f"Action failed with error: {e}. Try a different approach.")
+                # Still take screenshot and continue so agent can recover
+                time.sleep(SCREENSHOT_DELAY)
+                try:
+                    screenshot = take_screenshot()
+                except Exception:
+                    screenshot = None
                 continue
-            if cont not in ("yes", "y"):
-                print(f"  {DIM}Paused. Give me a new task or say 'continue'.{RESET}\n")
 
-        brain.trim_context()
+            # ── Wait for screen to update, then screenshot ───────────
+            # For waits, the action itself handles the delay
+            if action.get("type") != "wait":
+                time.sleep(SCREENSHOT_DELAY)
 
+            try:
+                screenshot = take_screenshot()
+            except Exception as e:
+                print(f"  {RED}Could not capture screen: {e}{RESET}")
+                screenshot = None
 
-def execute_action_safe(action):
-    """Execute with import guard."""
-    from screen import execute_action
-    return execute_action(action)
+            # Trim context periodically to avoid running out of memory
+            brain.trim_context()
+
+        # User typed stop
+        if stop_requested:
+            print(f"\n  {YELLOW}Stopped.{RESET} What would you like me to do next?\n")
+            stop_requested = False
 
 
 if __name__ == "__main__":
-    # Add agent dir to path so imports work
     agent_dir = os.path.dirname(os.path.abspath(__file__))
     if agent_dir not in sys.path:
         sys.path.insert(0, agent_dir)

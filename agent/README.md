@@ -32,32 +32,49 @@ Talk to it like a person:
 - **"Click on the Settings button"** - It finds and clicks whatever you describe.
 - **"Fill in the form with my info"** - It can type in fields for you.
 
+## How It Works (Continuous Vision Loop)
+
+The agent works like a live screen share - it sees your screen after **every single action**:
+
+```
+You: "Set up my Meta developer account"
+
+  [Screenshot] → AI sees your desktop
+  AI: "I see your desktop. Opening Chrome..."
+    > Clicked (450, 780)
+  [Screenshot] → AI sees Chrome opened
+  AI: "Chrome is open. Navigating to Meta Developers..."
+    > Typed: developers.facebook.com
+  [Screenshot] → AI sees the address bar
+  AI: "Pressing enter to navigate..."
+    > Pressed key: enter
+  [Screenshot] → AI sees the page loading
+  AI: "Page is loading, waiting..."
+    > Waited 2 seconds
+  [Screenshot] → AI sees Meta Developer portal
+  AI: "I can see the Meta Developer portal. Clicking Create App..."
+    > Clicked (890, 340)
+  ... continues until done ...
+```
+
+It never batches actions blindly. Every single click, keystroke, or scroll is followed by a fresh screenshot so the AI always knows exactly what's on screen before its next move.
+
 ## Safety Features
 
 - **Emergency stop**: Move your mouse to any screen corner to immediately stop all automation.
-- **Sensitive action confirmation**: The agent will ask you before doing anything involving payments, passwords, deletions, or signing out.
-- **Action limit**: After 30 actions, it pauses and asks if you want to continue.
-- **No passwords**: It will never type passwords unless you explicitly provide them.
+- **Type "stop"**: Interrupt the current task at any time.
+- **Payment confirmation only**: The agent only asks permission for actual payments/purchases. Everything else it just does.
+- **No action limits**: The agent runs until the task is done (or you say stop).
 
 ## Commands
 
 | Command | What it does |
 |---------|-------------|
 | Type naturally | Give the agent a task |
-| `look` / `screenshot` | Agent takes a fresh look at your screen |
-| `stop` / `pause` | Stop current automation |
+| `look` | Agent looks at your screen and describes it |
+| `stop` | Interrupt current task |
 | `reset` | Clear conversation history |
-| `quit` / `exit` | Exit the agent |
-
-## How It Works
-
-1. You type a task in natural language
-2. The agent takes a screenshot of your screen
-3. It sends the screenshot + your request to Claude (AI)
-4. Claude analyzes what's on screen and decides what actions to take
-5. The agent executes those actions (clicks, typing, scrolling)
-6. It takes another screenshot to verify the result
-7. Repeats until the task is done
+| `quit` | Exit the agent |
 
 ## Configuration
 
