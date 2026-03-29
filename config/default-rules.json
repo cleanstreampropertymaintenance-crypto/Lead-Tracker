@@ -1,0 +1,29 @@
+{
+  "targetCPL": 25.00,
+  "minSpendBeforeEval": 10.00,
+  "minImpressions": 500,
+  "scoring": {
+    "ctrWeight": 0.2,
+    "cplInverseWeight": 0.4,
+    "roasWeight": 0.3,
+    "cpcPenalty": 0.1
+  },
+  "budgetRules": {
+    "winnerIncrease": 0.20,
+    "loserDecrease": 0.30,
+    "maxBudgetMultiplier": 2.0,
+    "minDailyBudgetCents": 500,
+    "pauseAfterDaysLoser": 5,
+    "pauseCPLMultiplier": 3.0,
+    "decreaseCPLMultiplier": 2.0,
+    "decreaseAfterDays": 3,
+    "pauseZeroLeadsSpend": 20.00
+  },
+  "creativeRules": {
+    "fatigueFrequencyThreshold": 3.0,
+    "fatigueCTRDropPercent": 30,
+    "lowCTRPercentOfAvg": 50
+  },
+  "autoOptimize": false,
+  "optimizeIntervalHours": 6
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0B1120">
+<title>Lead Tracker</title>
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/css/ads-manager.css">
+</head>
+<body>
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('leads')">Leads</button>
+  <button class="tab-btn" onclick="switchTab('ads')">Ads Manager</button>
+</div>
+<div id="tab-leads" class="tab-content active">
+  <div id="app"></div>
+</div>
+<div id="tab-ads" class="tab-content">
+  <div id="ads-app"></div>
+</div>
+<script src="/js/app.js"></script>
+<script src="/js/lead-tracker.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/ads-manager.js"></script>
+</body>
+</html>

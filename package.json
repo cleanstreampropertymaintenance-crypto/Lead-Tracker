@@ -1,0 +1,13 @@
+{
+  "name": "lead-tracker",
+  "version": "2.0.0",
+  "description": "Lead Tracker with Meta Ads Manager - track leads and optimize Facebook ad campaigns",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
